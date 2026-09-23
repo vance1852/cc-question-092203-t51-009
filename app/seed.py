@@ -1,6 +1,7 @@
 """首次启动时初始化数据库：建表 + 内置管理员 + 种子业务数据。"""
 from datetime import datetime, timedelta
 
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from .auth import hash_password
@@ -9,9 +10,23 @@ from .database import Base, SessionLocal, engine
 from .models import Station, SwapRecord, User, Vehicle
 
 
+def _lightweight_migrations() -> None:
+    """对旧版本地数据库补列（SQLite 不支持由 create_all 自动改表）。
+
+    仅做幂等的 ADD COLUMN，缺失的维护窗口表由 create_all 创建。
+    """
+    inspector = inspect(engine)
+    if "stations" in inspector.get_table_names():
+        columns = {c["name"] for c in inspector.get_columns("stations")}
+        with engine.begin() as conn:
+            if "timezone" not in columns:
+                conn.execute(text("ALTER TABLE stations ADD COLUMN timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Shanghai'"))
+
+
 def init_db() -> None:
     """创建所有表并灌入种子数据（幂等：已存在则跳过）。"""
     Base.metadata.create_all(bind=engine)
+    _lightweight_migrations()
     db: Session = SessionLocal()
     try:
         _seed_admin(db)

@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
 from ..database import get_db
+from .. import maintenance as mw
 from ..models import Station, SwapRecord, Vehicle
 from ..schemas import SwapCreate, SwapOut
 
@@ -37,8 +38,12 @@ def create_swap(payload: SwapCreate, db: Session = Depends(get_db)):
     station = db.get(Station, payload.station_id)
     if not station:
         raise HTTPException(status_code=404, detail="换电站不存在")
-    if station.battery_ready <= 0:
-        raise HTTPException(status_code=422, detail="该换电站暂无满电电池可换")
+    # 维护窗口 / 手工维护 / 离线准入：纯时间推导，无定时器依赖
+    state = mw.check_swap_admission(db, station)
+    # 仓位级冻结窗口会压缩可服务仓位，可用满电电池不能超过可服务仓位数
+    available_ready = min(station.battery_ready, state["serviceable_slots"])
+    if available_ready <= 0:
+        raise HTTPException(status_code=422, detail="该换电站当前冻结仓位过多，暂无可换满电电池")
     if payload.soc_after <= payload.soc_before:
         raise HTTPException(status_code=422, detail="换电后电量应高于换电前电量")
 

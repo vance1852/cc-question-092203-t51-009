@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from .routers import auth, dashboard, stations, swaps, vehicles
+from .routers import auth, dashboard, maintenance, stations, swaps, vehicles
 from .seed import init_db
 
 
@@ -35,3 +35,4 @@ app.include_router(stations.router)
 app.include_router(vehicles.router)
 app.include_router(swaps.router)
 app.include_router(dashboard.router)
+app.include_router(maintenance.router)
