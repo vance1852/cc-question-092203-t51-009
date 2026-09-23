@@ -1,6 +1,7 @@
 """首次启动时初始化数据库：建表 + 内置管理员 + 种子业务数据。"""
 from datetime import datetime, timedelta
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .auth import hash_password
@@ -14,11 +15,23 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     db: Session = SessionLocal()
     try:
+        _migrate(db)
         _seed_admin(db)
         _seed_business(db)
         db.commit()
     finally:
         db.close()
+
+
+def _migrate(db: Session) -> None:
+    """轻量幂等迁移：为旧库补齐后续版本新增的列（SQLite 支持 ADD COLUMN）。"""
+    columns = {row[1] for row in db.execute(text("PRAGMA table_info(stations)")).fetchall()}
+    if "timezone" not in columns:
+        db.execute(
+            text("ALTER TABLE stations ADD COLUMN timezone VARCHAR(64) "
+                 "NOT NULL DEFAULT 'Asia/Shanghai'")
+        )
+
 
 
 def _seed_admin(db: Session) -> None:
